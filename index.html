@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Shape Clicker</title>
+<style>
+  :root{
+    --bg:#0f1724;
+    --panel:#0b1220;
+    --muted:#94a3b8;
+    --accent:#60a5fa;
+    --card:#0f1a26;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg);color:#e6eef8;}
+  header{
+    display:flex;justify-content:space-between;align-items:center;
+    padding:12px 20px;background:var(--panel);box-shadow:0 2px 6px rgba(0,0,0,0.6);
+  }
+  h1{margin:0;color:var(--accent);font-size:18px}
+  .counter{font-weight:700;font-size:16px}
+
+  /* place name bar */
+  .placebar{padding:10px;background:#0e1620;display:flex;gap:8px;align-items:center;justify-content:center;box-shadow:inset 0 -1px 0 rgba(255,255,255,0.02)}
+  .placebar input[type="text"]{min-width:220px;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+  .btn{display:inline-block;padding:6px 10px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:transparent;color:var(--accent);cursor:pointer}
+  .btn:active{transform:translateY(1px)}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+
+  /* main layout */
+  .main{display:grid;grid-template-columns:1fr 360px;gap:12px;padding:12px;box-sizing:border-box;align-items:start;min-height:calc(100vh - 120px)}
+  .play{background:var(--panel);border-radius:10px;padding:12px;position:relative;display:flex;flex-direction:column;gap:8px}
+  .play-area{position:relative;border:1px dashed rgba(255,255,255,0.06);border-radius:8px;background:#081018;flex:1;min-height:480px;overflow:hidden}
+
+  /* shapes */
+  .shape{position:absolute;display:flex;align-items:center;justify-content:center;font-weight:800;cursor:pointer;transition:transform .12s ease,opacity .25s;box-shadow:0 6px 18px rgba(0,0,0,0.6);z-index:8}
+  .shape span.value-badge{
+    position:absolute;
+    bottom:6px;
+    left:50%;
+    transform:translateX(-50%);
+    pointer-events:none;
+    font-size:12px;
+    font-weight:700;
+    color:#111;
+    background:rgba(255,255,255,0.92);
+    padding:3px 6px;
+    border-radius:8px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.25);
+  }
+
+  /* sidebar */
+  .side{display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 160px);overflow:auto;padding:0 6px}
+  .card{background:var(--card);border-radius:10px;padding:12px;box-sizing:border-box;border:1px solid rgba(255,255,255,0.02)}
+  .section-title{font-size:13px;color:var(--muted);margin-bottom:8px}
+  .shop-item{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px}
+  .small-btn{padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--accent);cursor:pointer}
+  .small-btn[disabled]{opacity:.45;cursor:not-allowed}
+
+  /* dev panel */
+  #devPanel{display:none;}
+  #devPanel .dev-grid{display:flex;flex-wrap:wrap;gap:8px}
+
+  /* chat */
+  #chatBox{height:220px;overflow-y:auto;background:#071019;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.02)}
+  .chat-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:6px}
+  .chat-name{font-weight:700;color:#fff;font-size:13px}
+  .chat-text{font-size:13px;color:#dfeafb}
+  .chat-time{margin-left:auto;font-size:11px;color:var(--muted)}
+  .chat-controls{display:flex;gap:8px;margin-top:8px}
+  .chat-controls input{flex:1;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+
+  /* responsive */
+  @media (max-width:900px){
+    .main{grid-template-columns:1fr 320px}
+    .play-area{min-height:420px}
+  }
+  @media (max-width:700px){
+    .main{grid-template-columns:1fr; padding:10px}
+    .side{max-height:none;overflow:visible}
+    #chatBox{height:180px}
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1 id="placeName">Shape Clicker</h1>
+    <div class="counter">Clicks: <span id="currency">0</span></div>
+  </header>
+
+  <div class="placebar">
+    Place Name: <input id="placeInput" placeholder="Enter place name (type 'opensesame' to reveal dev)"/>
+    <button class="btn" onclick="changePlace()">Set</button>
+    <button class="btn" onclick="saveGame()">Save</button>
+    <button class="btn" onclick="loadAndRefresh()">Load</button>
+  </div>
+
+  <div class="main">
+    <div class="play">
+      <div class="play-area" id="playArea" title="Click shapes to collect clicks"></div>
+      <div style="display:flex;gap:8px;justify-content:center;">
+        <button class="btn" onclick="spawnShape()">Spawn Now</button>
+        <button class="btn" onclick="spawnGoldShape()">Spawn Gold</button>
+        <button class="btn" onclick="unlockAllShapes()">Unlock All</button>
+      </div>
+    </div>
+
+    <aside class="side">
+      <div class="card">
+        <div class="section-title">Upgrade Shop</div>
+        <div id="upgradeList"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Shape Store</div>
+        <div id="shapeList"></div>
+      </div>
+
+      <div id="devPanel" class="card">
+        <div class="section-title">Dev Controls</div>
+        <div class="dev-grid">
+          <button class="small-btn" onclick="state.currency+=1000;updateUI();saveGame()">+1000 Money</button>
+          <button class="small-btn" onclick="state.autoCPS+=10;updateUI();">+10 Auto CPS</button>
+          <button class="small-btn" onclick="spawnShape()">Spawn Shape</button>
+          <button class="small-btn" onclick="unlockAllShapes()">Unlock All Shapes</button>
+          <button class="small-btn" onclick="maxUpgrades()">Max Upgrades</button>
+          <button class="small-btn" onclick="spawnGoldShape()">Spawn Gold Shape</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Global Chat</div>
+        <div id="chatBox" aria-live="polite"></div>
+
+        <div class="chat-controls" style="margin-top:10px">
+          <input id="chatName" placeholder="Nickname" />
+          <input id="chatInput" placeholder="Type a message and press Enter"/>
+          <button class="small-btn" onclick="sendMessage()">Send</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+<script>
+/* ================= GAME STATE ================= */
+const shapes = [
+  { id:'circle', label:'Circle', cost:0, value:1, size:60, borderRadius:'50%', color:'#ffd166', unlocked:true },
+  { id:'square', label:'Square', cost:30, value:5, size:70, borderRadius:'8px', color:'#06d6a0', unlocked:false },
+  { id:'rectangle', label:'Rectangle', cost:80, value:15, width:100, height:50, borderRadius:'6px', color:'#118ab2', unlocked:false, special:'rectangle' },
+  { id:'triangle', label:'Triangle', cost:120, value:20, size:80, borderRadius:'0', color:'#ef476f', unlocked:false, special:'triangle' },
+  { id:'star', label:'Star', cost:500, value:100, size:90, borderRadius:'0', color:'#ffd700', unlocked:false }
+];
+const upgrades = [
+  { id:'auto', label:'Auto-clicker (+1/sec)', baseCost:50, level:0, type:'auto', effect:1 },
+  { id:'mult', label:'+0.5x multiplier', baseCost:100, level:0, type:'mult', effect:0.5 }
+];
+let state = { currency:0, autoCPS:0, multiplier:1 };
+
+/* ================= DOM ================= */
+const currencyEl = document.getElementById('currency');
+const playArea = document.getElementById('playArea');
+const upgradeList = document.getElementById('upgradeList');
+const shapeList = document.getElementById('shapeList');
+const placeNameEl = document.getElementById('placeName');
+const devPanel = document.getElementById('devPanel');
+
+/* ================= SAVE SYSTEM ================= */
+const saveKey = "shapeClickerSave_v1";
+function saveGame(){
+  try {
+    const saveData = {
+      version:1,
+      currency: Math.floor(state.currency),
+      upgrades: upgrades.map(u=>u.level),
+      shapes: shapes.map(s=>s.unlocked)
+    };
+    localStorage.setItem(saveKey, JSON.stringify(saveData));
+    // quick feedback (temporary toast)
+    temporarilyFlash(placeNameEl, "Saved!", 900);
+  } catch(e){
+    console.warn("Save error", e);
+  }
+}
+function loadGame(){
+  const raw = localStorage.getItem(saveKey);
+  if(!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    if(data.upgrades) upgrades.forEach((u,i)=>u.level = data.upgrades[i] || 0);
+    if(data.shapes) shapes.forEach((s,i)=>s.unlocked = data.shapes[i] || false);
+    state.currency = data.currency || 0;
+    // recalc derived
+    state.autoCPS = (upgrades.find(u=>u.type==='auto').level || 0) * upgrades.find(u=>u.type==='auto').effect;
+    state.multiplier = 1 + ((upgrades.find(u=>u.type==='mult').level || 0) * upgrades.find(u=>u.type==='mult').effect);
+  } catch(e){
+    console.warn("Load error", e);
+  }
+}
+function loadAndRefresh(){ loadGame(); updateUI(); renderAll(); }
+
+/* tiny visual feedback */
+function temporarilyFlash(el, text, ms=800){
+  const orig = el.textContent;
+  el.textContent = text;
+  setTimeout(()=> el.textContent = orig, ms);
+}
+
+/* ================= CORE LOGIC ================= */
+function addCurrency(amount){
+  state.currency += Number(amount) || 0;
+  updateUI();
+  saveGame();
+}
+function getUpgradeCost(u){ return Math.max(1, Math.round(u.baseCost * Math.pow(1.6,u.level))); }
+
+function buyUpgrade(id){
+  const u = upgrades.find(x=>x.id===id);
+  const cost = getUpgradeCost(u);
+  if(state.currency < cost) return;
+  state.currency -= cost;
+  u.level++;
+  if(u.type === 'auto'){ state.autoCPS += u.effect; }
+  if(u.type === 'mult'){ state.multiplier = 1 + (u.level * u.effect); }
+  updateUI();
+  renderUpgrades();
+  saveGame();
+}
+function buyShape(id){
+  const s = shapes.find(x=>x.id===id);
+  if(s.unlocked || state.currency < s.cost) return;
+  state.currency -= s.cost;
+  s.unlocked = true;
+  updateUI();
+  renderShapes();
+  saveGame();
+}
+
+/* ================= SHAPES SPAWNING ================= */
+function spawnShape(){
+  const unlocked = shapes.filter(s=>s.unlocked);
+  if(!unlocked.length) return;
+  const s = unlocked[Math.floor(Math.random()*unlocked.length)];
+  createShapeElement(s, false);
+}
+
+function createShapeElement(s, isGold=false){
+  const el = document.createElement('div');
+  el.className = 'shape';
+  const multiplier = isGold ? 5 : 1;
+
+  if(s.special === 'rectangle'){
+    el.style.width = s.width + 'px';
+    el.style.height = s.height + 'px';
+    el.style.background = isGold ? '#ffd700' : s.color;
+    el.style.borderRadius = s.borderRadius;
+  } else if(s.special === 'triangle'){
+    el.style.width = s.size + 'px';
+    el.style.height = s.size + 'px';
+    el.style.background = 'transparent';
+    el.innerHTML = `<svg viewBox="0 0 100 100" width="100%" height="100%"><polygon points="50,5 95,95 5,95" fill="${isGold ? '#ffd700' : s.color}"/></svg>`;
+  } else if(s.id === 'star'){
+    el.style.width = s.size + 'px';
+    el.style.height = s.size + 'px';
+    el.innerHTML = '★';
+    el.style.fontSize = '28px';
+    el.style.color = isGold ? '#ffd700' : s.color;
+    el.style.background = 'transparent';
+  } else {
+    el.style.width = s.size + 'px';
+    el.style.height = s.size + 'px';
+    el.style.background = isGold ? '#ffd700' : s.color;
+    el.style.borderRadius = s.borderRadius;
+  }
+
+  // readable value badge
+  const val = document.createElement('span');
+  val.className = 'value-badge';
+  val.textContent = (s.value * multiplier);
+  el.appendChild(val);
+
+  // position
+  const w = (s.width || s.size);
+  const h = (s.height || s.size);
+  el.style.left = Math.max(6, Math.random()*(playArea.clientWidth - w - 6)) + 'px';
+  el.style.top  = Math.max(6, Math.random()*(playArea.clientHeight - h - 6)) + 'px';
+
+  // click
+  el.addEventListener('click', ()=>{
+    addCurrency( (s.value * multiplier) * state.multiplier );
+    // pop animation
+    el.style.transform = 'scale(1.15)';
+    setTimeout(()=> el.remove(), 140);
+  });
+
+  playArea.appendChild(el);
+  setTimeout(()=>{ el.style.opacity='0'; setTimeout(()=>el.remove(),250); }, 3000);
+}
+
+/* gold spawn */
+function spawnGoldShape(){
+  const unlocked = shapes.filter(s=>s.unlocked);
+  if(!unlocked.length) return;
+  const s = unlocked[Math.floor(Math.random()*unlocked.length)];
+  createShapeElement(s, true);
+}
+
+/* intervals */
+let spawnInterval = setInterval(spawnShape, 1200);
+let goldInterval = setInterval(()=>{ if(Math.random() < 0.035) spawnGoldShape(); }, 3000);
+let autoInterval = setInterval(()=>{ if(state.autoCPS > 0) addCurrency(state.autoCPS); }, 1000);
+
+/* ================= PLACE NAME + DEV ================= */
+function changePlace(){
+  const input = document.getElementById('placeInput').value.trim();
+  placeNameEl.textContent = input || "Shape Clicker";
+  if(input.toLowerCase() === "opensesame" || input.toLowerCase().endsWith("opensesame")){
+    devPanel.style.display = "block";
+    // store a hint / persistent dev access
+    localStorage.setItem('shapeDevUnlocked','1');
+  } else {
+    // only hide if not explicitly unlocked previously
+    const persisted = localStorage.getItem('shapeDevUnlocked');
+    if(!persisted) devPanel.style.display = "none";
+    placeNameEl.textContent = input || "Shape Clicker";
+  }
+}
+
+/* dev helpers */
+function unlockAllShapes(){ shapes.forEach(s=>s.unlocked=true); updateUI(); renderShapes(); saveGame(); }
+function maxUpgrades(){
+  upgrades.forEach(u=>u.level = 10);
+  state.autoCPS = upgrades.find(u=>u.type==='auto').level * upgrades.find(u=>u.type==='auto').effect;
+  state.multiplier = 1 + upgrades.find(u=>u.type==='mult').level * upgrades.find(u=>u.type==='mult').effect;
+  updateUI(); renderUpgrades(); saveGame();
+}
+
+/* ================= RENDER ================= */
+function renderUpgrades(){
+  upgradeList.innerHTML = '';
+  upgrades.forEach(u=>{
+    const cost = getUpgradeCost(u);
+    const row = document.createElement('div');
+    row.className = 'shop-item';
+    row.innerHTML = `<div>${u.label} <span style="color:${u.level? '#bde0fe' : 'var(--muted)'}"> (Lv ${u.level})</span></div>
+                     <button class="small-btn" ${state.currency < cost ? 'disabled' : ''} onclick="buyUpgrade('${u.id}')">${cost}</button>`;
+    upgradeList.appendChild(row);
+  });
+}
+function renderShapes(){
+  shapeList.innerHTML = '';
+  shapes.forEach(s=>{
+    const row = document.createElement('div');
+    row.className = 'shop-item';
+    const owned = s.unlocked ? '(Owned)' : '';
+    row.innerHTML = `<div>${s.label} ${owned}</div>
+      <button class="small-btn" ${s.unlocked ? 'disabled' : ''} onclick="buyShape('${s.id}')">${s.unlocked ? '—' : s.cost}</button>`;
+    shapeList.appendChild(row);
+  });
+}
+function updateUI(){
+  currencyEl.innerText = Math.floor(state.currency);
+  renderUpgrades();
+  renderShapes();
+}
+function renderAll(){ renderUpgrades(); renderShapes(); }
+
+/* ================= INIT ================= */
+loadGame();
+updateUI();
+renderAll();
+
+/* autosave every 5s */
+setInterval(saveGame, 5000);
+
+/* ================= GLOBAL CHAT (Firebase REST) ================= */
+/* Using your provided DB url (assumes rules allow read/write). */
+const chatBox = document.getElementById('chatBox');
+const chatInput = document.getElementById('chatInput');
+const chatName  = document.getElementById('chatName');
+const chatURL = "https://shape-clicker-db0a8-default-rtdb.firebaseio.com/chat.json";
+
+// restore nickname if previously used
+if(localStorage.getItem('shapeChatName')){
+  chatName.value = localStorage.getItem('shapeChatName');
+}
+
+async function sendMessage(){
+  const name = (chatName.value.trim() || "Anon").slice(0,30);
+  const text = chatInput.value.trim();
+  if(!text) return;
+  const message = { name, text, time: Date.now() };
+  try {
+    await fetch(chatURL, { method: "POST", body: JSON.stringify(message) });
+    chatInput.value = "";
+    localStorage.setItem('shapeChatName', name);
+    fetchMessages(); // refresh immediately
+  } catch(e){
+    console.warn("Chat send failed", e);
+  }
+}
+
+async function fetchMessages(){
+  try {
+    const res = await fetch(chatURL);
+    const data = await res.json() || {};
+    const messages = Object.values(data).sort((a,b)=>a.time - b.time).slice(-100);
+    chatBox.innerHTML = '';
+    messages.forEach(m=>{
+      const row = document.createElement('div');
+      row.className = 'chat-row';
+      const nameEl = document.createElement('div');
+      nameEl.className = 'chat-name';
+      nameEl.textContent = m.name;
+      const textEl = document.createElement('div');
+      textEl.className = 'chat-text';
+      textEl.textContent = m.text;
+      const timeEl = document.createElement('div');
+      timeEl.className = 'chat-time';
+      const date = new Date(m.time || Date.now());
+      timeEl.textContent = date.toLocaleTimeString();
+      row.appendChild(nameEl);
+      row.appendChild(textEl);
+      row.appendChild(timeEl);
+      chatBox.appendChild(row);
+    });
+    chatBox.scrollTop = chatBox.scrollHeight;
+  } catch(e){
+    // quietly ignore fetch errors
+    // console.warn("fetchMessages failed", e);
+  }
+}
+// initial load and polling
+fetchMessages();
+setInterval(fetchMessages, 2000);
+
+/* support Enter to send */
+chatInput.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') sendMessage();
+});
+chatName.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') chatInput.focus();
+});
+
+/* keyboard convenience: click shapes by space? (optional) */
+// none by default
+
+</script>
+</body>
+</html>

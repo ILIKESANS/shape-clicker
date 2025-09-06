@@ -71,7 +71,7 @@
   .chat-controls input{flex:1;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
 
   /* responsive */
-  @media (max-width:900px){https://github.com/ILIKESANS/shape-clicker/settings
+  @media (max-width:900px){
     .main{grid-template-columns:1fr 320px}
     .play-area{min-height:420px}
   }
@@ -372,132 +372,78 @@ renderAll();
 /* autosave every 5s */
 setInterval(saveGame, 5000);
 
-/GLOBAL CHAT/
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Global Chat</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #222;
-      color: #eee;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-    }
-    .chat-container {
-      background: #333;
-      padding: 16px;
-      border-radius: 12px;
-      box-shadow: 0 0 12px rgba(0,0,0,0.5);
-      width: 400px;
-      max-width: 95%;
-    }
-    .chat-title {
-      font-size: 18px;
-      font-weight: bold;
-      margin-bottom: 8px;
-      text-align: center;
-    }
-    #chatBox {
-      height: 200px;
-      overflow-y: auto;
-      background: #111;
-      padding: 8px;
-      border-radius: 8px;
-      font-size: 14px;
-      margin-bottom: 8px;
-    }
-    #chatName, #chatInput {
-      width: 100%;
-      padding: 6px;
-      border: none;
-      border-radius: 6px;
-      margin-bottom: 6px;
-      font-size: 14px;
-    }
-    .chat-input-row {
-      display: flex;
-      gap: 6px;
-    }
-    #chatInput {
-      flex: 1;
-    }
-    button {
-      padding: 6px 12px;
-      border: none;
-      border-radius: 6px;
-      background: gold;
-      color: black;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    button:hover {
-      background: orange;
-    }
-  </style>
-</head>
-<body>
-  <div class="chat-container">
-    <div class="chat-title">🌐 Global Chat</div>
-    <div id="chatBox"></div>
-    <input id="chatName" placeholder="Nickname">
-    <div class="chat-input-row">
-      <input id="chatInput" placeholder="Type a message...">
-      <button onclick="sendMessage()">Send</button>
-    </div>
-  </div>
+/* ================= GLOBAL CHAT (Firebase REST) ================= */
+/* Using your provided DB url (assumes rules allow read/write). */
+const chatBox = document.getElementById('chatBox');
+const chatInput = document.getElementById('chatInput');
+const chatName  = document.getElementById('chatName');
+const chatURL = "https://shape-clicker-db0a8-default-rtdb.firebaseio.com/chat.json";
 
-  <script>
-    const chatBox = document.getElementById("chatBox");
-    const chatInput = document.getElementById("chatInput");
-    const chatName = document.getElementById("chatName");
+// restore nickname if previously used
+if(localStorage.getItem('shapeChatName')){
+  chatName.value = localStorage.getItem('shapeChatName');
+}
 
-    const chatURL = "https://shape-clicker-db0a8-default-rtdb.firebaseio.com/chat.json";
+async function sendMessage(){
+  const name = (chatName.value.trim() || "Anon").slice(0,30);
+  const text = chatInput.value.trim();
+  if(!text) return;
+  const message = { name, text, time: Date.now() };
+  try {
+    await fetch(chatURL, { method: "POST", body: JSON.stringify(message) });
+    chatInput.value = "";
+    localStorage.setItem('shapeChatName', name);
+    fetchMessages(); // refresh immediately
+  } catch(e){
+    console.warn("Chat send failed", e);
+  }
+}
 
-    async function sendMessage(){
-      const name = chatName.value.trim() || "Anon";
-      const text = chatInput.value.trim();
-      if(!text) return;
-      const message = { name, text, time: Date.now() };
-      await fetch(chatURL, {
-        method:"POST",
-        body: JSON.stringify(message)
-      });
-      chatInput.value = "";
-      fetchMessages();
-    }
-
-    chatInput.addEventListener("keypress", function(e){
-      if(e.key === "Enter"){
-        sendMessage();
-      }
+async function fetchMessages(){
+  try {
+    const res = await fetch(chatURL);
+    const data = await res.json() || {};
+    const messages = Object.values(data).sort((a,b)=>a.time - b.time).slice(-100);
+    chatBox.innerHTML = '';
+    messages.forEach(m=>{
+      const row = document.createElement('div');
+      row.className = 'chat-row';
+      const nameEl = document.createElement('div');
+      nameEl.className = 'chat-name';
+      nameEl.textContent = m.name;
+      const textEl = document.createElement('div');
+      textEl.className = 'chat-text';
+      textEl.textContent = m.text;
+      const timeEl = document.createElement('div');
+      timeEl.className = 'chat-time';
+      const date = new Date(m.time || Date.now());
+      timeEl.textContent = date.toLocaleTimeString();
+      row.appendChild(nameEl);
+      row.appendChild(textEl);
+      row.appendChild(timeEl);
+      chatBox.appendChild(row);
     });
+    chatBox.scrollTop = chatBox.scrollHeight;
+  } catch(e){
+    // quietly ignore fetch errors
+    // console.warn("fetchMessages failed", e);
+  }
+}
+// initial load and polling
+fetchMessages();
+setInterval(fetchMessages, 2000);
 
-    async function fetchMessages(){
-      const res = await fetch(chatURL);
-      const data = await res.json() || {};
-      const messages = Object.values(data).sort((a,b)=>a.time-b.time).slice(-50);
-      chatBox.innerHTML = "";
-      messages.forEach(m=>{
-        const div = document.createElement("div");
-        const date = new Date(m.time).toLocaleTimeString();
-        div.textContent = `[${date}] ${m.name}: ${m.text}`;
-        chatBox.appendChild(div);
-      });
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
-    setInterval(fetchMessages,2000);
-  </script>
-</body>
-</html>
+/* support Enter to send */
+chatInput.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') sendMessage();
+});
+chatName.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter') chatInput.focus();
+});
 
+/* keyboard convenience: click shapes by space? (optional) */
+// none by default
 
 </script>
 </body>
 </html>
-
